@@ -1,0 +1,121 @@
+name: Deploy backend
+
+# Push to main touching backend/ -> build, push to Artifact Registry, deploy
+# to Cloud Run. Charles wires the identity federation and the secrets listed
+# in the README; this workflow assumes they exist and does not create them.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: chiops
+  REGION: europe-west1
+  SERVICE: predmark
+  REPOSITORY: predmark
+  IMAGE: predmark
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      # The suite runs without GCP credentials by design: every test that
+      # would touch Firestore, GCS or Secret Manager is either pure logic or
+      # driven through a test double.
+      - name: Run tests
+        working-directory: backend
+        run: python -m pytest -q
+
+  deploy:
+    name: Build and deploy
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build
+        working-directory: backend
+        run: |
+          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${IMAGE}"
+          docker build \
+            --build-arg BUILD_SHA="${GITHUB_SHA}" \
+            -t "${IMAGE_URI}:${GITHUB_SHA}" \
+            -t "${IMAGE_URI}:latest" \
+            .
+          echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
+
+      - name: Push
+        run: |
+          docker push "${IMAGE_URI}:${GITHUB_SHA}"
+          docker push "${IMAGE_URI}:latest"
+
+      # --no-allow-unauthenticated: the dashboard reaches this through the
+      # portal proxy (CHI-POL-004), never directly.
+      #
+      # PMXT_ACCESS_TOKEN is the shared secret between uvicorn and the pmxt
+      # sidecar inside the container. It is not a venue credential — those
+      # live in Secret Manager and are read at execution time.
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE_URI}:${GITHUB_SHA}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --service-account "${{ secrets.GCP_RUNTIME_SERVICE_ACCOUNT }}" \
+            --set-env-vars "GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},GCS_BUCKET=predmark-data,BUILD_SHA=${GITHUB_SHA},ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}" \
+            --set-secrets "PMXT_ACCESS_TOKEN=predmark-pmxt-access-token:latest" \
+            --memory 2Gi \
+            --cpu 2 \
+            --timeout 900 \
+            --concurrency 4 \
+            --min-instances 0 \
+            --max-instances 2
+
+      # min-instances 0 is deliberate. The lay engine ran minScale=1 with an
+      # in-process loop, so the container never recycled and an expired
+      # credential was never refreshed — that took the platform down three
+      # times. This service is invoked by Cloud Scheduler and reads its
+      # credentials fresh on every cycle, so it cannot develop that failure.
+
+      - name: Report
+        run: |
+          echo "Deployed ${IMAGE_URI}:${GITHUB_SHA}"
+          gcloud run services describe "${SERVICE}" \
+            --region "${REGION}" --project "${PROJECT_ID}" \
+            --format 'value(status.url)'

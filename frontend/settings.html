@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chimera PredMark — Settings</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+    <div class="brand">Chimera <span>PredMark</span></div>
+    <nav>
+        <a href="index.html">Dashboard</a>
+        <a href="#" class="active">Settings</a>
+    </nav>
+</header>
+
+<main>
+    <div class="tabs">
+        <button data-panel="config" class="active">Configuration</button>
+        <button data-panel="credentials">Credentials</button>
+        <button data-panel="audit">Audit trail</button>
+    </div>
+
+    <!-- CONFIGURATION --------------------------------------------------- -->
+    <div class="panel" id="panel-config">
+        <fieldset>
+            <legend>Venues</legend>
+            <div id="venue-settings"></div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Scanning</legend>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="scanning.poll_interval_seconds">Poll interval (seconds)</label>
+                    <input type="number" id="scanning.poll_interval_seconds" min="30" step="30">
+                    <div class="help">Displayed as the expected next scan. The real cadence is the Cloud Scheduler job — change it there too.</div>
+                </div>
+                <div class="field">
+                    <label for="scanning.min_liquidity">Minimum liquidity (USD)</label>
+                    <input type="number" id="scanning.min_liquidity" min="0" step="100">
+                    <div class="help">Falls back to 24h volume where a venue reports no liquidity, as Kalshi does.</div>
+                </div>
+                <div class="field">
+                    <label for="scanning.min_volume_24h">Minimum 24h volume (USD)</label>
+                    <input type="number" id="scanning.min_volume_24h" min="0" step="100">
+                </div>
+                <div class="field">
+                    <label for="scanning.match_threshold">Title match threshold</label>
+                    <input type="number" id="scanning.match_threshold" min="0" max="1" step="0.01">
+                    <div class="help">0–1. Lower finds more pairs and more false pairs. Numbers and dates must match exactly regardless.</div>
+                </div>
+                <div class="field">
+                    <label for="scanning.min_hours_to_resolution">Minimum hours to resolution</label>
+                    <input type="number" id="scanning.min_hours_to_resolution" min="0" step="0.5">
+                    <div class="help">A market resolving imminently cannot be entered on two venues safely.</div>
+                </div>
+                <div class="field">
+                    <label for="scanning.max_days_to_resolution">Maximum days to resolution</label>
+                    <input type="number" id="scanning.max_days_to_resolution" min="0" step="1">
+                </div>
+                <div class="field">
+                    <label for="scanning.book_fetch_margin_floor">Book-fetch margin floor</label>
+                    <input type="number" id="scanning.book_fetch_margin_floor" step="0.005">
+                    <div class="help">Pairs below this top-of-book margin are not priced against real depth. Lowering it costs scan time.</div>
+                </div>
+                <div class="field">
+                    <label for="scanning.max_book_fetches">Max book fetches per scan</label>
+                    <input type="number" id="scanning.max_book_fetches" min="0" step="10">
+                </div>
+                <div class="field">
+                    <label for="scanning.exclude_keywords">Excluded title keywords</label>
+                    <input type="text" id="scanning.exclude_keywords" data-list="true">
+                    <div class="help">Comma separated.</div>
+                </div>
+                <div class="field">
+                    <label for="scanning.include_categories">Included categories</label>
+                    <input type="text" id="scanning.include_categories" data-list="true">
+                    <div class="help">Comma separated. Empty means all.</div>
+                </div>
+                <div class="field">
+                    <label for="scanning.exclude_categories">Excluded categories</label>
+                    <input type="text" id="scanning.exclude_categories" data-list="true">
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Margin</legend>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="margin.min_margin_to_trade">Minimum net margin to trade</label>
+                    <input type="number" id="margin.min_margin_to_trade" min="0" max="1" step="0.005">
+                    <div class="help">Net of both venues' fees. 0.02 = 2%.</div>
+                </div>
+                <div class="field">
+                    <label for="margin.min_margin_to_record">Minimum net margin to record</label>
+                    <input type="number" id="margin.min_margin_to_record" min="-1" max="1" step="0.005">
+                    <div class="help">Below this a pair is not written down at all.</div>
+                </div>
+                <div class="field">
+                    <label for="margin.min_outcome_price">Minimum outcome price</label>
+                    <input type="number" id="margin.min_outcome_price" min="0" max="0.5" step="0.01">
+                    <div class="help">The tails are where stale quotes and phantom liquidity live.</div>
+                </div>
+                <div class="field">
+                    <label for="margin.max_outcome_price">Maximum outcome price</label>
+                    <input type="number" id="margin.max_outcome_price" min="0.5" max="1" step="0.01">
+                </div>
+                <div class="field">
+                    <label for="margin.complement_tolerance">Complementarity tolerance</label>
+                    <input type="number" id="margin.complement_tolerance" min="0.005" max="0.5" step="0.005">
+                    <div class="help">A binary market's two outcomes must price to about $1 between them — holding both pays exactly $1. Markets breaching this are dropped as bad data. Limitless returned the same order book for both outcomes of 61 markets, which presented as a 1090% arbitrage.</div>
+                </div>
+                <div class="field">
+                    <label for="margin.max_plausible_margin">Plausibility ceiling</label>
+                    <input type="number" id="margin.max_plausible_margin" min="0.01" max="10" step="0.05">
+                    <div class="help">Margins above this are recorded but never traded. Real cross-venue spreads are a few per cent; anything far above is a stale quote or a mis-mapped outcome.</div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Execution</legend>
+            <div class="form-grid">
+                <div class="field inline">
+                    <input type="checkbox" id="execution.trading_enabled">
+                    <label for="execution.trading_enabled">Trading enabled</label>
+                </div>
+                <div class="field inline">
+                    <input type="checkbox" id="execution.dry_run">
+                    <label for="execution.dry_run">Dry run (run every check, submit nothing)</label>
+                </div>
+                <div class="field">
+                    <label for="execution.stake_per_trade">Stake per trade (USD)</label>
+                    <input type="number" id="execution.stake_per_trade" min="0" step="1">
+                    <div class="help">Capital must sit on both venues at once — exposure is the sum of both legs, not the difference.</div>
+                </div>
+                <div class="field">
+                    <label for="execution.max_stake_per_trade">Hard maximum stake (USD)</label>
+                    <input type="number" id="execution.max_stake_per_trade" min="0" step="1">
+                    <div class="help">Ceiling on the above. The API refuses more regardless of what is typed.</div>
+                </div>
+                <div class="field">
+                    <label for="execution.max_concurrent_trades">Max concurrent trades</label>
+                    <input type="number" id="execution.max_concurrent_trades" min="0" step="1">
+                </div>
+                <div class="field">
+                    <label for="execution.slippage_tolerance">Slippage tolerance</label>
+                    <input type="number" id="execution.slippage_tolerance" min="0" max="0.5" step="0.005">
+                    <div class="help">As a probability, e.g. 0.01 = one cent.</div>
+                </div>
+                <div class="field">
+                    <label for="execution.second_leg_retry_limit">Second-leg retry limit</label>
+                    <input type="number" id="execution.second_leg_retry_limit" min="0" max="10" step="1">
+                    <div class="help">How many times to chase an unfilled second leg before unwinding.</div>
+                </div>
+                <div class="field">
+                    <label for="execution.second_leg_reprice_ceiling">Second-leg reprice ceiling</label>
+                    <input type="number" id="execution.second_leg_reprice_ceiling" min="0" max="0.5" step="0.005">
+                    <div class="help">Most we will pay above the quoted price to complete a hedge. Past this, unwinding is cheaper.</div>
+                </div>
+                <div class="field">
+                    <label for="execution.fill_timeout_seconds">Fill timeout (seconds)</label>
+                    <input type="number" id="execution.fill_timeout_seconds" min="1" max="120" step="1">
+                    <div class="help">Single-leg fills must be caught in seconds, not at the next scan.</div>
+                </div>
+                <div class="field">
+                    <label for="execution.fill_poll_interval_seconds">Fill poll interval (seconds)</label>
+                    <input type="number" id="execution.fill_poll_interval_seconds" min="0.1" max="10" step="0.1">
+                </div>
+                <div class="field">
+                    <label for="execution.unwind_retry_limit">Unwind retry limit</label>
+                    <input type="number" id="execution.unwind_retry_limit" min="0" max="10" step="1">
+                </div>
+                <div class="field">
+                    <label for="execution.unwind_max_loss">Unwind loss flag threshold</label>
+                    <input type="number" id="execution.unwind_max_loss" min="0" max="1" step="0.01">
+                    <div class="help">Unwinds always execute — this only decides when one is flagged as a bad price. A setting that could refuse to close an unhedged position would turn a small loss into an open-ended one.</div>
+                </div>
+                <div class="field inline">
+                    <input type="checkbox" id="execution.require_full_depth">
+                    <label for="execution.require_full_depth">Require full depth on both books</label>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Risk</legend>
+            <div class="form-grid">
+                <div class="field inline">
+                    <input type="checkbox" id="risk.kill_switch">
+                    <label for="risk.kill_switch">Kill switch engaged (halts execution, scanning continues)</label>
+                </div>
+                <div class="field">
+                    <label for="risk.kill_switch_reason">Kill switch reason</label>
+                    <input type="text" id="risk.kill_switch_reason">
+                </div>
+                <div class="field">
+                    <label for="risk.daily_loss_limit">Daily loss limit (USD)</label>
+                    <input type="number" id="risk.daily_loss_limit" min="0" step="5">
+                </div>
+                <div class="field">
+                    <label for="risk.daily_trade_limit">Daily trade limit</label>
+                    <input type="number" id="risk.daily_trade_limit" min="0" step="1">
+                </div>
+                <div class="field">
+                    <label for="risk.max_total_exposure">Max total exposure (USD)</label>
+                    <input type="number" id="risk.max_total_exposure" min="0" step="10">
+                    <div class="help">Summed across venues. Positions cannot be netted across platforms.</div>
+                </div>
+                <div class="field">
+                    <label for="risk.required_resolution_status">Required resolution status</label>
+                    <select id="risk.required_resolution_status">
+                        <option value="MATCHED">MATCHED only</option>
+                        <option value="MATCHED_OR_UNVERIFIED">MATCHED or UNVERIFIED</option>
+                    </select>
+                    <div class="help">DIFFERS is never tradeable under any setting.</div>
+                </div>
+                <div class="field inline">
+                    <input type="checkbox" id="risk.allow_unverified_override">
+                    <label for="risk.allow_unverified_override">Allow UNVERIFIED override</label>
+                </div>
+                <div class="field">
+                    <label for="risk.override_reason">Override reason (logged on every trade)</label>
+                    <input type="text" id="risk.override_reason">
+                </div>
+            </div>
+            <div class="warn-box" id="override-warning" hidden>
+                <strong>Both switches are set.</strong> Pairs whose resolution equivalence could not
+                be confirmed are now tradeable. An UNVERIFIED pair may be two different questions —
+                holding both sides is double the risk, not a hedge. Every such trade is recorded
+                with the override flag and this reason.
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Alerts</legend>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="alerts.unmatched_legs_threshold">Unmatched legs alert threshold</label>
+                    <input type="number" id="alerts.unmatched_legs_threshold" min="0" step="1">
+                </div>
+                <div class="field">
+                    <label for="alerts.failed_unwinds_threshold">Failed unwinds alert threshold</label>
+                    <input type="number" id="alerts.failed_unwinds_threshold" min="0" step="1">
+                </div>
+                <div class="field">
+                    <label for="alerts.errors_threshold">Errors alert threshold</label>
+                    <input type="number" id="alerts.errors_threshold" min="0" step="1">
+                </div>
+                <div class="field">
+                    <label for="alerts.halt_on_unmatched_legs">Auto-halt after N unmatched legs</label>
+                    <input type="number" id="alerts.halt_on_unmatched_legs" min="0" step="1">
+                    <div class="help">Blocks further trades once the execution layer has needed containment this many times today. 0 disables.</div>
+                </div>
+            </div>
+        </fieldset>
+    </div>
+
+    <!-- CREDENTIALS ----------------------------------------------------- -->
+    <div class="panel" id="panel-credentials" hidden>
+        <div class="warn-box">
+            <strong>Credentials go to Google Secret Manager, never to Firestore.</strong>
+            The value is posted over HTTPS, written straight to Secret Manager, and read back
+            only inside the execution path. No endpoint returns a stored value — this page can
+            confirm that a credential exists and show its last four characters, and that is all
+            it will ever be able to do. A wallet private key is not a password; it is the funds
+            themselves, and a leak is irreversible with no recourse.
+        </div>
+        <div id="credential-blocks"></div>
+    </div>
+
+    <!-- AUDIT ----------------------------------------------------------- -->
+    <div class="panel" id="panel-audit" hidden>
+        <section>
+            <h2>Settings audit trail <span class="count" id="audit-count"></span></h2>
+            <table id="audit">
+                <thead>
+                <tr><th>When</th><th>Who</th><th>Field</th><th>From</th><th>To</th><th>Note</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </div>
+
+    <div class="save-bar">
+        <button class="primary" id="save">Save settings</button>
+        <button id="reload">Discard and reload</button>
+        <span class="status" id="save-status"></span>
+    </div>
+</main>
+
+<script src="settings.js"></script>
+</body>
+</html>

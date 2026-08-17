@@ -1,0 +1,32 @@
+# Reference material — cloned for reading, never shipped.
+reference/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node (pmxt sidecar is installed inside the container, never committed)
+node_modules/
+package-lock.json
+
+# Generated at deploy time
+frontend/config.js
+
+# Local environment. Credentials belong in Secret Manager, never in a file,
+# but this stops an accidental one from being committed.
+.env
+*.env
+!.env.example
+*.pem
+*.key
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
