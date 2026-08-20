@@ -43,7 +43,11 @@ OPPORTUNITIES_COLLECTION = "predmark-opportunities"
 # refused by venues/pmxt_client.py.
 
 PMXT_URL: str = os.getenv("PMXT_URL", "http://127.0.0.1:3847")
-PMXT_ACCESS_TOKEN: str = os.getenv("PMXT_ACCESS_TOKEN", "")
+# .strip() is not cosmetic: a secret stored with a trailing newline —
+# which `openssl rand | gcloud --data-file=-` produces by default —
+# makes an illegal HTTP header value, and every sidecar call fails with
+# a bare LocalProtocolError that says nothing about the cause.
+PMXT_ACCESS_TOKEN: str = os.getenv("PMXT_ACCESS_TOKEN", "").strip()
 PMXT_TIMEOUT_SECONDS: float = float(os.getenv("PMXT_TIMEOUT_SECONDS", "60"))
 PMXT_ORDER_TIMEOUT_SECONDS: float = float(os.getenv("PMXT_ORDER_TIMEOUT_SECONDS", "25"))
 

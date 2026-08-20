@@ -88,28 +88,45 @@ def write_secret(venue: str, key: str, value: str) -> dict[str, Any]:
         raise ValueError("credential value is empty")
 
     client = _client()
-    try:
-        client.create_secret(
+
+    # Add a version to the existing secret. The seven predmark secrets are
+    # provisioned up front so the runtime account can hold
+    # secretVersionAdder on those six alone rather than project-wide
+    # secretmanager.admin — which would also hand it every other service's
+    # credentials in this project. Creating a secret is therefore expected
+    # to be forbidden, and is only attempted as a fallback for a deployment
+    # whose secrets have not been pre-provisioned.
+    def _add_version():
+        return client.add_secret_version(
             request={
-                "parent": _parent(),
-                "secret_id": secret_id,
-                "secret": {"replication": {"automatic": {}}},
+                "parent": _secret_path(secret_id),
+                "payload": {"data": value.encode("utf-8")},
             }
         )
-    except gcp_exceptions.AlreadyExists:
-        pass
+
+    try:
+        version = _add_version()
+    except gcp_exceptions.NotFound:
+        try:
+            client.create_secret(
+                request={
+                    "parent": _parent(),
+                    "secret_id": secret_id,
+                    "secret": {"replication": {"automatic": {}}},
+                }
+            )
+        except gcp_exceptions.AlreadyExists:
+            pass
+        except gcp_exceptions.PermissionDenied as exc:
+            raise SecretsUnavailable(
+                f"secret {secret_id} does not exist and this service account "
+                "cannot create it — provision it first"
+            ) from exc
+        version = _add_version()
     except gcp_exceptions.PermissionDenied as exc:
         raise SecretsUnavailable(
-            "the service account lacks secretmanager.secrets.create on "
-            f"{config.PROJECT_ID}"
+            f"the service account cannot add a version to {secret_id}"
         ) from exc
-
-    version = client.add_secret_version(
-        request={
-            "parent": _secret_path(secret_id),
-            "payload": {"data": value.encode("utf-8")},
-        }
-    )
     _CACHE.pop(secret_id, None)
 
     # Note what was written, never what it was.
