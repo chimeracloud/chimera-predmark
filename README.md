@@ -15,18 +15,74 @@ the portal proxy so it inherits Cloudflare Access and the portal JWT.
 
 | Component | State | Detail |
 |---|---|---|
-| Dashboard | **Live** | CST portal, `/products/arbitrage/predmark/*` — four pages in `chimeracloud/cst` |
-| Backend | **Live** | `predmark-00002-l2n` on Cloud Run, `europe-west1`, image `predmark:v2` |
+| Dashboard | **Live** | CST portal, `/products/arbitrage/predmark/*` (repo `chimeracloud/cst`) |
+| Backend | **Live** | `predmark-00003-qvs` on Cloud Run, `europe-west1`, image `predmark:v3` |
 | pmxt sidecar | **Running** | `/ready` reports `pmxt_sidecar: true` |
+| Portal proxy | **Connected** | `PROXY_PREDMARK` on `cst-api`; its SA holds `run.invoker` here |
+| Polymarket | **Authenticated** | balance reads; unfunded ($0.00) |
+| Kalshi | **Authenticated** | Kalshi SA account works against the same API; unfunded ($0.00) |
+| Limitless | **Disabled** | data unusable — see "Platform coverage" below |
 | Artifact Registry | Created | `europe-west1-docker.pkg.dev/chiops/predmark` |
-| GCS bucket | Created | `gs://predmark-data`, 4 scans archived |
+| GCS bucket | Created | `gs://predmark-data` |
 | Firestore | In use | collections in the `(default)` database, `europe-west2` |
 | Service account | Created | `predmark-sa@chiops.iam.gserviceaccount.com` |
-| Secrets | Provisioned, **empty** | 7 secrets exist; only the pmxt token has a value |
-| Cloud Scheduler | **Not enabled** | API off; no automatic scans |
-| Dashboard → backend | **Connected** | `PROXY_PREDMARK` on `cst-api`; its service account holds `run.invoker` here |
-| Venue credentials | **None** | no venue account is usable yet |
+| Cloud Scheduler | **Not enabled** | API off; scans run only when triggered from the dashboard |
 | Trading | **Off** | `trading_enabled: false`, `dry_run: true` |
+| Tradeable pairs found | **Zero** | not a fault — see below |
+
+### Platform coverage — why nothing trades yet
+
+Measured 22 August 2026 against the live platforms. The engine runs correctly
+end to end and finds **no tradeable pairs**. That is a property of the market,
+not a fault in the matcher, and it is the open question for the strategy.
+
+**Polymarket 1,374 active markets · Kalshi 1,494 active · not one pair.**
+
+| Subject | Polymarket | Kalshi | Overlap? |
+|---|---|---|---|
+| Bitcoin | 84 | **0** | none reachable |
+| Ethereum | 49 | **0** | none reachable |
+| Fed / rates | 31 | 182 | yes, but unmatchable by wording |
+| CPI | 0 | 104 | none |
+| GDP | 0 | 113 | none |
+| NFL | 33 | 27 | different questions |
+| NBA | 18 | 27 | different questions |
+
+Three things this shows:
+
+1. **Kalshi returns no Bitcoin or Ethereum price markets through pmxt.** Kalshi
+   runs those markets in reality, so they are either paginated beyond the 1,500
+   the fetch returns or sit in a series pmxt does not surface. This is the
+   largest single unlock available: crypto is where both platforms are deep and
+   where questions are most objectively comparable.
+
+2. **The one real overlap is Fed rate decisions, and the wording defeats
+   matching.** Polymarket asks *"Will the Fed decrease interest rates by 25 bps
+   after the September meeting?"*; Kalshi asks *"Will the upper bound of the
+   target range for the federal funds rate in effect at 11:59 PM…"*. Same event,
+   almost no shared vocabulary. Title similarity cannot bridge that; a person
+   reading both can.
+
+3. **Where both list a sport, they sell different questions.** Polymarket sells
+   championship winners, Kalshi sells player retirements and franchise news.
+   Kalshi's book is US economics; Polymarket's is global politics and crypto.
+
+**Limitless remains unusable.** It returns the identical order book for both
+outcomes of most markets — YES and NO both quoting the same price, which
+presented as a 1090% margin before the complementarity check caught it. Of 400
+markets fetched, 8 survive. Disabled.
+
+**Routes forward, in order of value:**
+
+1. Reach Kalshi's crypto markets — pagination, series lookup, or a direct
+   Kalshi API call outside pmxt's `fetchMarkets`.
+2. Hand-map known equivalent series (Fed decisions first). Reliable, manual,
+   and it makes the highest-liquidity overlap tradeable.
+3. Semantic matching rather than string similarity, which would catch the Fed
+   case automatically but is a substantial piece of work.
+
+Until one of these lands, the engine will keep scanning and correctly
+reporting nothing.
 
 ### What remains
 
