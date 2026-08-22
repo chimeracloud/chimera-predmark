@@ -9,6 +9,60 @@ trades, GCS for raw scan data, Cloud Scheduler for the trigger.
 
 ---
 
+## Deployment status — 22 August 2026
+
+| Component | State | Detail |
+|---|---|---|
+| Frontend | **Live** | predmark.chimerasportstrading.com (Cloudflare Pages, project `predmark`) |
+| Backend | **Live** | `predmark-00002-l2n` on Cloud Run, `europe-west1`, image `predmark:v2` |
+| pmxt sidecar | **Running** | `/ready` reports `pmxt_sidecar: true` |
+| Artifact Registry | Created | `europe-west1-docker.pkg.dev/chiops/predmark` |
+| GCS bucket | Created | `gs://predmark-data`, 4 scans archived |
+| Firestore | In use | collections in the `(default)` database, `europe-west2` |
+| Service account | Created | `predmark-sa@chiops.iam.gserviceaccount.com` |
+| Secrets | Provisioned, **empty** | 7 secrets exist; only the pmxt token has a value |
+| Cloud Scheduler | **Not enabled** | API off; no automatic scans |
+| Dashboard → backend | **Not connected** | no portal proxy route, so the dashboard renders empty |
+| Venue credentials | **None** | no venue account is usable yet |
+| Trading | **Off** | `trading_enabled: false`, `dry_run: true` |
+
+### What remains
+
+**Infrastructure**
+1. Enable `cloudscheduler.googleapis.com` and create the `predmark-scan` job.
+2. Add a portal-proxy route so the dashboard can reach Cloud Run. Until then the
+   settings page cannot be used and credentials must be written directly to
+   Secret Manager.
+3. Wire the GitHub Actions deploy (workload identity federation), or keep
+   deploying by hand with `gcloud builds submit` and `gcloud run deploy`.
+
+**Before any capital moves**
+4. Venue accounts and funded balances. Kalshi went international in October
+   2025 and South Africa is not restricted, but whether Kalshi SA quotes the
+   same markets as Kalshi US is unproven — the test is an authenticated fetch
+   with real credentials.
+5. Confirm each venue's fee schedule against the defaults in
+   `venues/registry.py`. A wrong fee model does not fail loudly.
+6. Exchange control on converting rand to USDC.
+7. Identity on the dashboard. It can halt trading, change stake, store wallet
+   keys and force an unwind, behind a single WAF IP rule with no audit of who.
+
+### Known production issues found and fixed
+
+- **A destroyed secret version 500s `/scan`.** `FAILED_PRECONDITION` was
+  uncaught, so a rotated-away key took detection down for every venue rather
+  than reading as "not configured". Fixed in `settings/secrets.py`.
+- **Trailing newlines corrupt credentials.** `openssl rand | gcloud
+  --data-file=-` and the Secret Manager console both append one; for the
+  sidecar token that is an illegal HTTP header value. Now stripped on read and
+  on use.
+- **Secret Manager IAM is scoped per secret.** The runtime account holds
+  `secretVersionAdder` on the six venue secrets rather than project-wide
+  `secretmanager.admin`, which in `chiops` would have exposed every other
+  service's credentials.
+
+---
+
 ## What it does
 
 | Stage | Behaviour |

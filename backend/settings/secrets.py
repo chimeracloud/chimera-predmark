@@ -163,6 +163,19 @@ def read_secret(secret_id: str, use_cache: bool = True) -> Optional[str]:
         )
     except gcp_exceptions.NotFound:
         return None
+    except gcp_exceptions.FailedPrecondition:
+        # The latest version is DESTROYED or DISABLED. That is the same
+        # situation as "not configured" — there is no usable credential — and
+        # it must read as such rather than propagating. Uncaught, this
+        # returned a 500 from /scan and took detection down entirely for a
+        # venue whose key had simply been rotated away.
+        log(
+            logger,
+            logging.WARNING,
+            "secret has no usable version — treating as not configured",
+            secret_id=secret_id,
+        )
+        return None
     except gcp_exceptions.PermissionDenied as exc:
         raise SecretsUnavailable(
             f"the service account cannot read secret {secret_id}"
@@ -182,7 +195,13 @@ def read_secret(secret_id: str, use_cache: bool = True) -> Optional[str]:
         )
         return None
 
-    value = response.payload.data.decode("utf-8")
+    # Strip whitespace. A credential entered through the Secret Manager
+    # console, or piped in with `echo` rather than `printf`, arrives with a
+    # trailing newline. For an API key that means an auth failure the venue
+    # reports only as "invalid signature"; for a header value it is outright
+    # illegal. PEM blocks are unaffected — their internal newlines are kept,
+    # only the surrounding whitespace goes.
+    value = response.payload.data.decode("utf-8").strip()
     _CACHE[secret_id] = value
     return value
 
