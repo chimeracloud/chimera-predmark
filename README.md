@@ -4,8 +4,10 @@ Prediction market arbitrage — detection **and** execution — across Polymarke
 Kalshi and Limitless, through a self-hosted [pmxt](https://github.com/pmxt-dev/pmxt)
 sidecar.
 
-FastAPI on Cloud Run, dashboard on Cloudflare Pages, Firestore for config and
-trades, GCS for raw scan data, Cloud Scheduler for the trigger.
+FastAPI on Cloud Run, Firestore for config and trades, GCS for raw scan data,
+Cloud Scheduler for the trigger. The dashboard lives in the CST portal at
+**Products › Arbitrage › PredMark** (repo `chimeracloud/cst`), reached through
+the portal proxy so it inherits Cloudflare Access and the portal JWT.
 
 ---
 
@@ -13,7 +15,7 @@ trades, GCS for raw scan data, Cloud Scheduler for the trigger.
 
 | Component | State | Detail |
 |---|---|---|
-| Frontend | **Live** | predmark.chimerasportstrading.com (Cloudflare Pages, project `predmark`) |
+| Dashboard | **Live** | CST portal, `/products/arbitrage/predmark/*` — four pages in `chimeracloud/cst` |
 | Backend | **Live** | `predmark-00002-l2n` on Cloud Run, `europe-west1`, image `predmark:v2` |
 | pmxt sidecar | **Running** | `/ready` reports `pmxt_sidecar: true` |
 | Artifact Registry | Created | `europe-west1-docker.pkg.dev/chiops/predmark` |
@@ -22,7 +24,7 @@ trades, GCS for raw scan data, Cloud Scheduler for the trigger.
 | Service account | Created | `predmark-sa@chiops.iam.gserviceaccount.com` |
 | Secrets | Provisioned, **empty** | 7 secrets exist; only the pmxt token has a value |
 | Cloud Scheduler | **Not enabled** | API off; no automatic scans |
-| Dashboard → backend | **Not connected** | no portal proxy route, so the dashboard renders empty |
+| Dashboard → backend | **Connected** | `PROXY_PREDMARK` on `cst-api`; its service account holds `run.invoker` here |
 | Venue credentials | **None** | no venue account is usable yet |
 | Trading | **Off** | `trading_enabled: false`, `dry_run: true` |
 
@@ -232,7 +234,7 @@ Cloud Run: predmark  (europe-west1, chiops, --no-allow-unauthenticated)
   predmark-trades
         ^
         |  portal proxy (CHI-POL-004)
-  Cloudflare Pages: predmark
+  CST portal (Cloudflare Pages: cst)
 ```
 
 **Why Cloud Scheduler and not a background loop.** The lay engine runs
@@ -345,8 +347,7 @@ chimera-predmark/
 │   ├── storage/               gcs.py, trades.py
 │   ├── scan/                  runner.py
 │   └── tests/                 93 tests
-├── frontend/                  index.html, settings.html, app.js, settings.js, style.css
-├── .github/workflows/         deploy-backend.yml, deploy-frontend.yml
+├── .github/workflows/         deploy-backend.yml
 ├── NOTICE.md                  third-party licences
 └── README.md
 ```
@@ -362,9 +363,7 @@ chimera-predmark/
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/<num>/locations/global/workloadIdentityPools/<pool>/providers/<provider>` |
 | `GCP_DEPLOY_SERVICE_ACCOUNT` | Service account the workflow impersonates to build and deploy |
 | `GCP_RUNTIME_SERVICE_ACCOUNT` | Service account the Cloud Run service runs as |
-| `ALLOWED_ORIGINS` | Comma-separated browser origins, e.g. `https://predmark.pages.dev` |
-| `CLOUDFLARE_API_TOKEN` | Pages deploy token |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
+| `ALLOWED_ORIGINS` | Comma-separated browser origins, e.g. `https://chimerasportstrading.com` |
 
 ### GitHub repository variables
 
@@ -435,6 +434,32 @@ The full container:
 docker build -t predmark backend/
 docker run -p 8080:8080 -e PMXT_ACCESS_TOKEN=dev predmark
 ```
+
+---
+
+## The dashboard
+
+The UI is not in this repository. It lives in the CST portal
+(`chimeracloud/cst`) as four React pages under
+`/products/arbitrage/predmark/`:
+
+| Page | What it shows |
+|---|---|
+| Dashboard | Live opportunities with both venues' resolution criteria side by side, open positions, venue balances, kill switch, scan trigger |
+| Trades | Both legs, fills, settlement, realised P&L, unmatched-leg and failed-unwind flags |
+| History | Spread distribution, resolution match rates, P&L by day, scan archive |
+| Settings | Every configurable value, credential entry, and the settings audit trail |
+
+It reaches this service through the portal proxy —
+`cst-api` → `/api/proxy/predmark/...` → Cloud Run — which is why the service
+can stay `--no-allow-unauthenticated` and still be usable from a browser.
+
+A standalone Cloudflare Pages site was built first and has been removed. It sat
+on its own origin with no identity, so every settings change was audited as
+"dashboard" with nobody's name against it. Inside the portal the same page
+inherits Cloudflare Access and the portal JWT, and a page that can halt
+trading, change stake, store wallet keys and force an unwind is attributable
+to a person.
 
 ---
 
