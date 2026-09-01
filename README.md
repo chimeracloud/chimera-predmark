@@ -11,24 +11,44 @@ the portal proxy so it inherits Cloudflare Access and the portal JWT.
 
 ---
 
-## Deployment status — 22 August 2026
+## Deployment status — 1 September 2026
 
 | Component | State | Detail |
 |---|---|---|
 | Dashboard | **Live** | CST portal, `/products/arbitrage/predmark/*` (repo `chimeracloud/cst`) |
-| Backend | **Live** | `predmark-00003-qvs` on Cloud Run, `europe-west1`, image `predmark:v3` |
-| pmxt sidecar | **Running** | `/ready` reports `pmxt_sidecar: true` |
+| Backend | **Live** | `predmark-00003-qvs`, image `predmark:v3`, deployed 22 Aug, `europe-west1` |
+| pmxt sidecar | **Running** | in-container, `/ready` reports healthy |
 | Portal proxy | **Connected** | `PROXY_PREDMARK` on `cst-api`; its SA holds `run.invoker` here |
-| Polymarket | **Authenticated** | balance reads; unfunded ($0.00) |
-| Kalshi | **Authenticated** | Kalshi SA account works against the same API; unfunded ($0.00) |
-| Limitless | **Disabled** | data unusable — see "Platform coverage" below |
-| Artifact Registry | Created | `europe-west1-docker.pkg.dev/chiops/predmark` |
-| GCS bucket | Created | `gs://predmark-data` |
-| Firestore | In use | collections in the `(default)` database, `europe-west2` |
-| Service account | Created | `predmark-sa@chiops.iam.gserviceaccount.com` |
-| Cloud Scheduler | **Not enabled** | API off; scans run only when triggered from the dashboard |
-| Trading | **Off** | `trading_enabled: false`, `dry_run: true` |
-| Tradeable pairs found | **Zero** | not a fault — see below |
+| Cloudflare Access | **Live** | portal behind Access (OTP) on the Chimera account, plus the portal JWT |
+| Polymarket | **Authenticated** | balance reads; **unfunded ($0.00)** |
+| Kalshi | **Authenticated** | Kalshi SA account, same API as Kalshi US; **unfunded ($0.00)** |
+| Limitless | **Disabled** | data unusable — see "Platform coverage" |
+| Cloud Scheduler | **Not enabled** | API still off; every scan to date was triggered by hand |
+| Trading | **Off** | `trading_enabled: false`, `dry_run: true`, kill switch released |
+
+### Scan record to 1 September 2026
+
+Eleven scans archived to `gs://predmark-data/scans/`, the most recent on
+31 August. Every one completed cleanly and found nothing.
+
+| | 22 Aug | 26 Aug | 31 Aug |
+|---|---|---|---|
+| Polymarket markets | 255 | 1,297 | 1,243 |
+| Kalshi markets | 90 | 91 | 76 |
+| Pairs considered | 0 | 0 | 0 |
+| Opportunities | 0 | 0 | 0 |
+| Trades placed | 0 | 0 | 0 |
+| Errors | 0 | 0 | 0 |
+| Duration | 49s | 70s | 69s |
+
+**The Polymarket depth fix worked and changed nothing.** Raising
+`market_limit` took coverage from 476 markets to ~1,250 — close to
+Polymarket's full active book — and produced exactly zero additional pairs.
+That rules out under-sampling as the explanation and leaves the coverage
+mismatch below as the whole of it.
+
+No errors in any scan. The engine is behaving correctly; there is simply
+nothing on both books at once.
 
 ### Platform coverage — why nothing trades yet
 
@@ -86,24 +106,35 @@ reporting nothing.
 
 ### What remains
 
+**The blocker.** No pair has ever been found. Until the coverage problem below
+is solved there is nothing for this engine to trade, and funding it would
+achieve nothing. Everything else on this list is secondary to that.
+
 **Infrastructure**
 1. Enable `cloudscheduler.googleapis.com` and create the `predmark-scan` job.
-2. Add a portal-proxy route so the dashboard can reach Cloud Run. Until then the
-   settings page cannot be used and credentials must be written directly to
-   Secret Manager.
-3. Wire the GitHub Actions deploy (workload identity federation), or keep
+   Until then scans run only when triggered from the dashboard — eleven so far,
+   all by hand.
+2. Wire the GitHub Actions deploy (workload identity federation), or keep
    deploying by hand with `gcloud builds submit` and `gcloud run deploy`.
 
 **Before any capital moves**
-4. Venue accounts and funded balances. Kalshi went international in October
-   2025 and South Africa is not restricted, but whether Kalshi SA quotes the
-   same markets as Kalshi US is unproven — the test is an authenticated fetch
-   with real credentials.
-5. Confirm each venue's fee schedule against the defaults in
-   `venues/registry.py`. A wrong fee model does not fail loudly.
-6. Exchange control on converting rand to USDC.
-7. Identity on the dashboard. It can halt trading, change stake, store wallet
-   keys and force an unwind, behind a single WAF IP rule with no audit of who.
+3. Fund both platforms. Both authenticate; both hold $0.00.
+4. Confirm each platform's fee schedule against the defaults in
+   `venues/registry.py`. A wrong fee model does not fail loudly — it quietly
+   turns a profitable trade into a losing one.
+5. Exchange control on converting rand to USDC.
+6. **Rotate the Polymarket wallet key before funding.** It was pasted into a
+   chat transcript in plain text and therefore exists in
+   `~/.claude/`, in the `predmark-handover*.zip` archives in iCloud, and in any
+   backup of either. Cheap to replace now, impossible to undo after funding.
+
+**Settled since the last revision**
+- Portal proxy is connected; the settings page works through it.
+- Kalshi SA authenticates against the same API as Kalshi US — the open question
+  from August is answered.
+- Dashboard identity is solved: it now sits inside the CST portal behind
+  Cloudflare Access and the portal JWT, so settings changes are attributable to
+  a logged-in user rather than to "dashboard".
 
 ### Known production issues found and fixed
 
